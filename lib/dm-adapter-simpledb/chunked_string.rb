@@ -45,7 +45,7 @@ module DmAdapterSimpledb
         #return original value, they could have put strings in the system not
         #using the adapter or previous versions that are larger than chunk size,
         #but less than 1024
-        value
+        value.to_s
       end
     end
 

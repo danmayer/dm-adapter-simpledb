@@ -5,11 +5,11 @@
 
 Gem::Specification.new do |s|
   s.name = %q{dm-adapter-simpledb}
-  s.version = "1.1.0"
+  s.version = "1.2.0"
 
   s.required_rubygems_version = Gem::Requirement.new(">= 0") if s.respond_to? :required_rubygems_version=
   s.authors = ["Jeremy Boles", "Edward Ocampo-Gooding", "Dan Mayer", "Thomas Olausson", "Avdi Grimm"]
-  s.date = %q{2009-11-24}
+  s.date = %q{2010-01-11}
   s.description = %q{A DataMapper adapter for Amazon's SimpleDB service. 
 
 Features:
