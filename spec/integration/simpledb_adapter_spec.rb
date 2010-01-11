@@ -224,4 +224,5 @@ EOF
       attributes["__dm_metadata"].should include("table:projects")
     end
   end
+
 end

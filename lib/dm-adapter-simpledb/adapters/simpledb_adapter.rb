@@ -24,6 +24,7 @@ module DataMapper
         @sdb_options[:domain] = options.fetch(:domain) { 
           options[:path].to_s.gsub(%r{(^/+)|(/+$)},"") # remove slashes
         }
+        @sdb_options[:create_domain] = options.fetch(:create_domain) { false }
         # We do not expect to be saving any nils in future, because now we
         # represent null values by removing the attributes. The representation
         # here is chosen on the basis of it being unlikely to match any strings
@@ -35,6 +36,10 @@ module DataMapper
         @consistency_policy = 
           normalised_options.fetch(:wait_for_consistency) { false }
         @sdb = options.fetch(:sdb_interface) { nil }
+        if @sdb_options[:create_domain] && !domains.include?(@sdb_options[:domain])
+          @sdb_options[:logger].info "Creating domain #{domain}"
+          @sdb.create_domain(@sdb_options[:domain])
+        end
       end
 
       def create(resources)
@@ -144,6 +149,17 @@ module DataMapper
           results = sdb.get_attributes(domain, '__dm_consistency_token', '__dm_consistency_token')
           tokens  = results[:attributes]['__dm_consistency_token']
         end until tokens.include?(@current_consistency_token)
+      end
+
+      def domains
+        result = []
+        token  = nil
+        begin
+          response = sdb.list_domains(nil, token)
+          result.concat(response[:domains])
+          token = response[:next_token]
+        end while(token)
+        result
       end
 
     private
