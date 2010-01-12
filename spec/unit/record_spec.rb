@@ -235,6 +235,7 @@ describe DmAdapterSimpledb::Record do
       @resource_class = Class.new do
         include DataMapper::Resource
         storage_names[:default] = "books"
+        storage_names[:backup]  = "tomes"
 
         property :author,       String, :key => true
         property :date,         Date
@@ -310,6 +311,13 @@ describe DmAdapterSimpledb::Record do
       end
 
     end
+
+    it "should take repo into account when determining table name" do
+      DataMapper.repository(:backup) do
+        @it.table.should be == "tomes"
+      end
+    end
+
   end
 
   describe "given a saved datamapper resource" do

@@ -68,6 +68,7 @@ module DmAdapterSimpledb
         @simpledb_attributes  = attrs_to_update
         @deletable_attributes = attrs_to_delete
         @item_name = item_name_for_resource(hash_or_resource)
+        @model = hash_or_resource.model
       when Hash
         hash = hash_or_resource
         @item_name = hash.keys.first
@@ -142,8 +143,14 @@ module DmAdapterSimpledb
     # Returns the "Table" this record belongs to. SimpleDB has no concept of
     # tables, but we fake it with metadata.
     def table
-      Table.name_from_metadata(metadata) || 
+      table_name_from_model || Table.name_from_metadata(metadata) || 
         storage_name
+    end
+
+    def table_name_from_model(repository=DataMapper.repository.name)
+      if defined?(@model) && @model
+        @model.storage_name(repository)
+      end
     end
 
     def metadata
