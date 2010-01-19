@@ -105,6 +105,12 @@ describe 'with multiple records saved' do
       results = Hero.all(:limit => 110)
       results.should have(110).entries
     end
+
+    it "should be able to page through results" do
+      results1 = Hero.all(:limit => 10, :order => [:id.asc])
+      results2 = Hero.all(:offset => 9, :limit => 10, :order => [:id.asc])
+      results1.to_a.last.name.should be == results2.to_a.first.name
+    end
   end
 
 end

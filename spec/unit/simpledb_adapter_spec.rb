@@ -74,7 +74,20 @@ describe DataMapper::Adapters::SimpleDBAdapter do
         ])
       @record = Product.first
     end
-    
   end
+
+  # it "should be able to request items with an offset" do
+  #   @sdb.should_receive(:select).
+  #     with(/count(\*).*LIMIT 10000/, anything).
+  #     exactly(1).times.
+  #     ordered.
+  #     and_return(:next_token => "TOKEN")
+  #   @sdb.should_receive(:select).
+  #     with(anything, "TOKEN").
+  #     exactly(1).times.
+  #     ordered.
+  #     and_return(:items => [])
+  #   @record = Product.all(:offset => 10000, :limit => 10)
+  # end
 
 end

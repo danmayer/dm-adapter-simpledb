@@ -16,6 +16,7 @@ Features:
  * Array properties
  * Basic aggregation support (Model.count("..."))
  * String "chunking" permits attributes to exceed the 1024-byte limit
+ * Support for efficient :limit and :offset, for result set paging
 
 Note: as of version 1.0.0, this gem supports supports the DataMapper 0.10.*
 series and breaks backwards compatibility with DataMapper 0.9.*.
@@ -39,6 +40,7 @@ http://github.com/devver/dm-adapter-simpledb/
 == TODO
 
  * More complete handling of NOT conditions in queries
+ * Support for ORs, parens, and nested queries in general
  * Robust quoting in SELECT calls
  * Handle exclusive ranges natively
    Implement as inclusive range + filter step
@@ -48,15 +50,6 @@ http://github.com/devver/dm-adapter-simpledb/
    - Store floats using exponential notation
  * Option to store Date/Time/DateTime as ISO8601
  * Full aggregate support (min/max/etc)
- * Offset support
-   Note, from the SimpleDB documentation:
-   
-   "The next token returned by count(*) and select are interchangeable as long
-   as the where and order by clauses match. For example, if you want to return
-   the 200 items after the first 10,000 (similar to an offset), you can perform
-   a count with a limit clause of 10,000 and use the next token to return the
-   next 200 items with select."
-
  * Option to use libxml if available
  * Parallelized queries for increased throughput
  * Support of normalized 1:1 table:domain schemes that works with associations
@@ -64,6 +57,7 @@ http://github.com/devver/dm-adapter-simpledb/
  * Support BatchPutAttributes
  * Silence SSL warnings
    See http://pivotallabs.com/users/carl/blog/articles/1079-standup-blog-11-24-2009-model-validations-without-backing-store-associations-to-array-and-ssl-with-aws
+ * Token cache for reduced requests when given an offset
 
 == Usage
   

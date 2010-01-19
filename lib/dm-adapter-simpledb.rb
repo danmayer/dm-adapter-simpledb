@@ -8,6 +8,7 @@ require 'dm-aggregates'
 require 'digest/sha1'
 require 'right_aws'
 require 'uuidtools'
+require 'sdbtools'
 
 require 'dm-adapter-simpledb/sdb_array'
 require 'dm-adapter-simpledb/utils'

@@ -92,7 +92,16 @@ module DataMapper
         query.conditions.operands.reject!{ |op|
           !unsupported_conditions.include?(op)
         }
-        records = query.filter_records(proto_resources)
+
+        # This used to be a simple call to Query#filter_records(), but that
+        # caused the result limit to be re-imposed on an already limited result
+        # set, with the upshot that too few records were returned. So here we do
+        # everything filter_records() does EXCEPT limiting.
+        records = proto_resources
+        records = records.uniq if query.unique?
+        records = query.match_records(records)
+        records = query.sort_records(records)
+
 
         records
       end
@@ -123,7 +132,10 @@ module DataMapper
       end
       
       def query(query_call, query_limit = 999999999)
-        select(query_call, query_limit).collect{|x| x.values[0]}
+        SDBTools::Operation.new(sdb, :select, query_call).inject([]){
+          |a, results| 
+          a.concat(results[:items].map{|i| i.values.first})
+        }[0...query_limit]
       end
       
       def aggregate(query)
@@ -147,7 +159,7 @@ module DataMapper
         token = :none
         begin
           results = sdb.get_attributes(domain, '__dm_consistency_token', '__dm_consistency_token')
-          tokens  = results[:attributes]['__dm_consistency_token']
+          tokens  = Array(results[:attributes]['__dm_consistency_token'])
         end until tokens.include?(@current_consistency_token)
       end
 
@@ -227,43 +239,59 @@ module DataMapper
             else
               raise ArgumentError, "Unsupported inclusion op: #{op.value.inspect}"
             end
+          when :or
+              # TODO There's no reason not to support OR
+              unsupported_conditions << op
           else raise "Invalid query op: #{op.inspect}"
           end
         end
         [conditions,order,unsupported_conditions]
       end
       
-      def select(query_call, query_limit)
-        items = []
-        time = Benchmark.realtime do
-          sdb_continuation_key = nil
-          while (results = sdb.select(query_call, sdb_continuation_key)) do
-            sdb_continuation_key = results[:next_token]
-            items += results[:items]
-            break if items.length > query_limit
-            break if sdb_continuation_key.nil?
-          end
-        end; DataMapper.logger.debug(format_log_entry(query_call, time))
-        items[0...query_limit]
-      end
-      
       #gets all results or proper number of results depending on the :limit
       def get_results(query, conditions, order)
         fields_to_request = query.fields.map{|f| f.field}
         fields_to_request << DmAdapterSimpledb::Record::METADATA_KEY
-        output_list = fields_to_request.join(', ')
-        query_call = "SELECT #{output_list} FROM #{domain} "
-        query_call << "WHERE #{conditions.compact.join(' AND ')}" if conditions.length > 0
-        query_call << " #{order}"
-        if query.limit!=nil
-          query_limit = query.limit
-          query_call << " LIMIT #{query.limit}" 
-        else
-          #on large items force the max limit
-          query_limit = 999999999 #TODO hack for query.limit being nil
-          #query_call << " limit 2500" #this doesn't work with continuation keys as it halts at the limit passed not just a limit per query.
+        
+        selection = SDBTools::Selection.new(
+          sdb,
+          domain,
+          :attributes => fields_to_request)
+
+        if query.order && query.order.length > 0
+          query_object = query.order[0]
+          #anything sorted on must be a condition for SDB
+          conditions << "#{query_object.target.name} IS NOT NULL"
+          selection.order_by = query_object.target.name
+          selection.order    = case query_object.operator
+                               when :asc then :ascending
+                               when :desc then :descending
+                               else raise "Unrecognized sort direction"
+                               end
         end
-        records = select(query_call, query_limit)
+        selection.conditions = conditions.compact.inject([]){|conds, cond|
+          conds << "AND" unless conds.empty?
+          conds << cond
+        }
+        if query.limit.nil?
+          selection.limit = :none
+        else
+          selection.limit = query.limit
+        end
+        unless query.offset.nil?
+          selection.offset = query.offset
+        end
+
+        items = []
+        time = Benchmark.realtime do
+          # TODO update Record to be created from name/attributes pair
+          selection.each do |name, value| 
+            items << {name => value}
+          end
+        end
+        DataMapper.logger.debug(format_log_entry(selection.to_s, time))
+
+        items
       end
       
       # Creates an item name for a query
