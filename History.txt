@@ -1,3 +1,20 @@
+== 1.3.0 2010-01-19
+
+* 1 major enhancement:
+  * Now supports :offset in queries. Combined with improved :limit support, this
+    makes it possible to efficiently paginate result sets.
+
+* 1 minor enhancement:
+  * Better quoting of select statements using the 'sdbtools' library.
+
+== 1.2.0 2010-01-13
+
+* 2 minor enhancements:
+  * Better support for String attributes with multiple values which were not
+    created by the String chunking system.
+  * Now tries to take model and repository into account when determining storage
+    name for a table.
+
 == 1.1.0 2009-11-24
 
 * 2 major enhancements:
