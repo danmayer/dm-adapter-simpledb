@@ -58,6 +58,8 @@ http://github.com/devver/dm-adapter-simpledb/
  * Silence SSL warnings
    See http://pivotallabs.com/users/carl/blog/articles/1079-standup-blog-11-24-2009-model-validations-without-backing-store-associations-to-array-and-ssl-with-aws
  * Token cache for reduced requests when given an offset
+ * Use logger set in initializer instead of DataMapper.logger
+ * Remove limit on :limit; decouple SimpleDB LIMIT from DataMapper :limit
 
 == Usage
   

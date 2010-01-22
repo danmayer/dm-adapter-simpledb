@@ -56,7 +56,7 @@ module DataMapper
             created += 1
           end
         end
-        DataMapper.logger.debug(format_log_entry("(#{created}) INSERT #{resources.inspect}", time))
+        logger.debug(format_log_entry("(#{created}) INSERT #{resources.inspect}", time))
         modified!
         created
       end
@@ -71,7 +71,7 @@ module DataMapper
             deleted += 1
           end
           raise NotImplementedError.new('Only :eql on delete at the moment') if not_eql_query?(collection.query)
-        end; DataMapper.logger.debug(format_log_entry("(#{deleted}) DELETE #{collection.query.conditions.inspect}", time))
+        end; logger.debug(format_log_entry("(#{deleted}) DELETE #{collection.query.conditions.inspect}", time))
         modified!
         deleted
       end
@@ -126,7 +126,7 @@ module DataMapper
           end
           raise NotImplementedError.new('Only :eql on delete at the moment') if not_eql_query?(collection.query)
         end
-        DataMapper.logger.debug(format_log_entry("UPDATE #{collection.query.conditions.inspect} (#{updated} times)", time))
+        logger.debug(format_log_entry("UPDATE #{collection.query.conditions.inspect} (#{updated} times)", time))
         modified!
         updated
       end
@@ -149,7 +149,7 @@ module DataMapper
         results = nil
         time = Benchmark.realtime do
           results = sdb.select(query_call)
-        end; DataMapper.logger.debug(format_log_entry(query_call, time))
+        end; logger.debug(format_log_entry(query_call, time))
         [results[:items][0].values.first["Count"].first.to_i]
       end
 
@@ -289,7 +289,7 @@ module DataMapper
             items << {name => value}
           end
         end
-        DataMapper.logger.debug(format_log_entry(selection.to_s, time))
+        logger.debug(format_log_entry(selection.to_s, time))
 
         items
       end
