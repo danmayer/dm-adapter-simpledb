@@ -3,7 +3,8 @@ module DataMapper
     class SimpleDBAdapter < AbstractAdapter
       include DmAdapterSimpledb::Utils
 
-      attr_reader :sdb_options
+      attr_reader   :sdb_options
+      attr_accessor :logger
 
       # For testing purposes ONLY. Seriously, don't enable this for production
       # code.
@@ -18,7 +19,8 @@ module DataMapper
         @sdb_options[:secret_key] = options.fetch(:secret_key) { 
           options[:password] 
         }
-        @sdb_options[:logger] = options.fetch(:logger) { DataMapper.logger }
+        @logger = options.fetch(:logger) { DataMapper.logger }
+        @sdb_options[:logger] = @logger
         @sdb_options[:server] = options.fetch(:host) { 'sdb.amazonaws.com' }
         @sdb_options[:port]   = options[:port] || 443 # port may be set but nil
         @sdb_options[:domain] = options.fetch(:domain) { 
@@ -33,6 +35,12 @@ module DataMapper
         # RightAWS's nil-token replacement altogether, but that does not appear
         # to be an option.
         @sdb_options[:nil_representation] = "<[<[<NIL>]>]>"
+        @null_mode = options.fetch(:null) { false }
+
+        if @null_mode
+          logger.info "SimpleDB adapter for domain #{domain} is in null mode"
+        end
+
         @consistency_policy = 
           normalised_options.fetch(:wait_for_consistency) { false }
         @sdb = options.fetch(:sdb_interface) { nil }
@@ -316,6 +324,8 @@ module DataMapper
       
       # Returns an SimpleDB instance to work with
       def sdb
+        if @null_mode then return @sdb ||= NullSdbInterface.new(logger) end
+
         access_key = @sdb_options[:access_key]
         secret_key = @sdb_options[:secret_key]
         @sdb ||= RightAws::SdbInterface.new(access_key,secret_key,@sdb_options)

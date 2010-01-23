@@ -1,0 +1,24 @@
+#!/usr/bin/env ruby
+require 'rubygems'
+require File.expand_path('../lib/dm-adapter-simpledb', File.dirname(__FILE__))
+require 'logger'
+require 'irb'
+
+include DataMapper
+
+class Post
+  include Resource
+  
+  property :id,    Serial
+  property :title, String
+  property :body,  Text
+end
+
+DataMapper.setup(
+  :default,
+  :domain  => "example",
+  :adapter => 'simpledb',
+  :null    => true,
+  :logger  => ::Logger.new($stderr, ::Logger::DEBUG))
+
+IRB.start

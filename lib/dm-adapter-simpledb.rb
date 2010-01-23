@@ -10,6 +10,7 @@ require 'right_aws'
 require 'uuidtools'
 require 'sdbtools'
 
+$:.unshift(File.dirname(__FILE__))
 require 'dm-adapter-simpledb/sdb_array'
 require 'dm-adapter-simpledb/utils'
 require 'dm-adapter-simpledb/record'
