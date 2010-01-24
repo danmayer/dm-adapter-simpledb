@@ -432,8 +432,11 @@ module DataMapper
                      else
                        {}
                      end
-        table = DmAdapterSimpledb::Table.new(query.model)
-        conditions.merge!(DmAdapterSimpledb::Record::METADATA_KEY => table.token)
+        table      = DmAdapterSimpledb::Table.new(query.model)
+        meta_key   = DmAdapterSimpledb::Record::METADATA_KEY
+        quoted_key = SDBTools::Selection.quote_name(meta_key)
+        conditions.merge!(
+          :conditions => ["#{quoted_key} = ?", table.token])
         conditions
       end
       
