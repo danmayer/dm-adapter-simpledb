@@ -61,6 +61,8 @@ module DmAdapterSimpledb
           else
             comparison_to_expression(operand, "!=")
           end
+        elsif empty_inclusion?(operand)
+          nil
         else
           "NOT #{node_to_expression(operand)}"
         end
@@ -87,14 +89,21 @@ module DmAdapterSimpledb
 
     def comparison_to_expression(
         comparison, 
-        operator=comparison_operator(comparison))
-      field    = SDBTools::Selection.quote_name(comparison.subject.field)
-      values   = value_to_expression(comparison.value)
-      "#{field} #{operator} #{values}"
+        operator=comparison_operator(comparison),
+        values  = value_to_expression(comparison.value))
+      field = SDBTools::Selection.quote_name(comparison.subject.field)
+      if empty_inclusion?(comparison)
+        "#{field} IS NULL"
+      else
+        "#{field} #{operator} #{values}"
+      end
     end
 
     def array_to_expression(array)
       template, *replacements = *array.dup
+      if replacements.size == 1 && replacements.first.is_a?(Array)
+        replacements = replacements.first
+      end
       if replacements.size == 1 && replacements[0].is_a?(Hash)
         fill_template_from_hash(template, replacements[0])
       else
@@ -119,7 +128,7 @@ module DmAdapterSimpledb
         "#{quote_value(value.begin)} AND #{quote_value(value.end)}"
       when Array then
         value = value.map{|v| value_to_expression(v) }.join(", ")
-        value = "(#{value})" if value.size > 1
+        value = "(#{value})"
       else quote_value(value)
       end
     end
@@ -142,12 +151,30 @@ module DmAdapterSimpledb
       when LikeComparison                 then "LIKE"
       when InclusionComparison            then
         case comparison.value
-        when Range then "BETWEEN"
+        when Range then 
+          if comparison.value.exclude_end?
+            # We have tried to support exclusive ranges by simply adding
+            # the range to the unsupported_conditions list so that excluded
+            # values will be caught in post-filtering.  However, DataMapper
+            # is apparently casting the range begin/end values to Strings, even
+            # when the property type is an Integer. 
+
+            # Or it may be that something else is going wrong.  But the upshot
+            # is that the post-filtering step doesn't work.
+            raise NotImplementedError, 
+                  "Exclusive ranges are not supported by the SimpleDB adapter"
+          else
+            "BETWEEN"
+          end
         else "IN"
         end
       when RegexpComparison then throw :unsupported
       else raise NotImplementedError, "Unhandled comparison: #{comparison.inspect}"
       end
+    end
+
+    def empty_inclusion?(node)
+      node.is_a?(InclusionComparison) && Array(node.value).empty?
     end
   end
 end

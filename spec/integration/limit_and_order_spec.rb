@@ -40,7 +40,7 @@ describe 'with multiple records saved' do
 
   it 'should handle max item if limit is large case' do
     persons = Hero.all(:limit => 150)
-    persons.length.should ==3
+    persons.length.should == 3
   end
 
   it 'should handle ordering asc results with a limit' do

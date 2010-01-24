@@ -4,6 +4,7 @@ module DataMapper
       include DmAdapterSimpledb::Utils
 
       attr_reader   :sdb_options
+      attr_reader   :batch_limit
       attr_accessor :logger
 
       # For testing purposes ONLY. Seriously, don't enable this for production
@@ -35,7 +36,10 @@ module DataMapper
         # RightAWS's nil-token replacement altogether, but that does not appear
         # to be an option.
         @sdb_options[:nil_representation] = "<[<[<NIL>]>]>"
-        @null_mode = options.fetch(:null) { false }
+        @null_mode   = options.fetch(:null) { false }
+        @batch_limit = options.fetch(:batch_limit) {
+          SDBTools::Selection::DEFAULT_RESULT_LIMIT
+        }.to_i
 
         if @null_mode
           logger.info "SimpleDB adapter for domain #{domain_name} is in null mode"
@@ -52,7 +56,7 @@ module DataMapper
 
       def create(resources)
         created = 0
-        transaction("CREATE") do
+        transaction("CREATE #{resources.size} objects") do
           resources.each do |resource|
             uuid = UUIDTools::UUID.timestamp_create
             initialize_serial(resource, uuid.to_i)
@@ -60,7 +64,7 @@ module DataMapper
             record     = DmAdapterSimpledb::Record.from_resource(resource)
             attributes = record.writable_attributes
             item_name  = record.item_name
-            domain.put(item_name, attributes)
+            domain.put(item_name, attributes, :replace => true)
             created += 1
           end
         end
@@ -70,7 +74,7 @@ module DataMapper
       
       def delete(collection)
         deleted = 0
-        transaction("DELETE") do
+        transaction("DELETE #{collection.query.conditions}") do
           collection.each do |resource|
             record = DmAdapterSimpledb::Record.from_resource(resource)
             item_name = record.item_name
@@ -88,7 +92,7 @@ module DataMapper
 
       def read(query)
         maybe_wait_for_consistency
-        transaction("READ") do |t|
+        transaction("READ #{query.model.name} #{query.conditions}") do |t|
           query = query.dup
 
           selection = selection_from_query(query)
@@ -116,7 +120,7 @@ module DataMapper
       
       def update(attributes, collection)
         updated = 0
-        transaction("UPDATE") do
+        transaction("UPDATE #{collection.query} with #{attributes.inspect}") do
           collection.each do |resource|
             updated_resource = resource.dup
             updated_resource.attributes = attributes
@@ -138,27 +142,10 @@ module DataMapper
         updated
       end
       
-      def query(query_call, query_limit = 999999999)
-        SDBTools::Operation.new(sdb, :select, query_call).inject([]){
-          |a, results| 
-          a.concat(results[:items].map{|i| i.values.first})
-        }[0...query_limit]
-      end
-      
       def aggregate(query)
         raise NotImplementedError, "Only count is supported" unless (query.fields.first.operator == :count)
         transaction("AGGREGATE") do |t|
-          table    = DmAdapterSimpledb::Table.new(query.model)
-          sdb_type = table.simpledb_type
-          conditions, order, unsupported_conditions = set_conditions_and_sort_order(query, sdb_type)
-
-          query_call = "SELECT count(*) FROM #{domain_name} "
-          query_call << "WHERE #{conditions.compact.join(' AND ')}" if conditions.length > 0
-          results = nil
-          time = Benchmark.realtime do
-            results = sdb.select(query_call)
-          end; logger.debug(format_log_entry(query_call, time))
-          [results[:items][0].values.first["Count"].first.to_i]
+          [selection_from_query(query).count]
         end
       end
 
@@ -186,119 +173,6 @@ module DataMapper
         @sdb_options[:domain]
       end
 
-      #sets the conditions and order for the SDB query
-      def set_conditions_and_sort_order(query, sdb_type)
-        unsupported_conditions = []
-        conditions = ["simpledb_type = '#{sdb_type}'"]
-        # look for query.order.first and insure in conditions
-        # raise if order if greater than 1
-
-        if query.order && query.order.length > 0
-          query_object = query.order[0]
-          #anything sorted on must be a condition for SDB
-          conditions << "#{query_object.target.name} IS NOT NULL" 
-          order = "ORDER BY #{query_object.target.name} #{query_object.operator}"
-        else
-          order = ""
-        end
-        query.conditions.each do |op|
-          case op.slug
-          when :regexp
-            unsupported_conditions << op
-          when :eql
-            conditions << if op.value.nil?
-              "#{op.subject.name} IS NULL"
-            else
-              "#{op.subject.name} = '#{op.value}'"
-            end
-          when :not then
-            comp = op.operands.first
-            if comp.slug == :like
-              conditions << "#{comp.subject.name} not like '#{comp.value}'"
-              next
-            end
-            case comp.value
-            when Range, Set, Array, Regexp
-              unsupported_conditions << op
-            when nil
-              conditions << "#{comp.subject.name} IS NOT NULL"
-            else
-              conditions << "#{comp.subject.name} != '#{comp.value}'"
-            end
-          when :gt then conditions << "#{op.subject.name} > '#{op.value}'"
-          when :gte then conditions << "#{op.subject.name} >= '#{op.value}'"
-          when :lt then conditions << "#{op.subject.name} < '#{op.value}'"
-          when :lte then conditions << "#{op.subject.name} <= '#{op.value}'"
-          when :like then conditions << "#{op.subject.name} like '#{op.value}'"
-          when :in
-            case op.value
-            when Array, Set
-              values = op.value.collect{|v| "'#{v}'"}.join(',')
-              values = "'__NULL__'" if values.empty?                       
-              conditions << "#{op.subject.name} IN (#{values})"
-            when Range
-              if op.value.exclude_end?
-                unsupported_conditions << op
-              else
-                conditions << "#{op.subject.name} between '#{op.value.first}' and '#{op.value.last}'"
-              end
-            else
-              raise ArgumentError, "Unsupported inclusion op: #{op.value.inspect}"
-            end
-          when :or
-              # TODO There's no reason not to support OR
-              unsupported_conditions << op
-          else raise "Invalid query op: #{op.inspect}"
-          end
-        end
-        [conditions,order,unsupported_conditions]
-      end
-      
-      #gets all results or proper number of results depending on the :limit
-      def get_results(query, conditions, order)
-        fields_to_request = query.fields.map{|f| f.field}
-        fields_to_request << DmAdapterSimpledb::Record::METADATA_KEY
-        
-        selection = SDBTools::Selection.new(
-          sdb,
-          domain_name,
-          :attributes => fields_to_request)
-
-        if query.order && query.order.length > 0
-          query_object = query.order[0]
-          #anything sorted on must be a condition for SDB
-          conditions << "#{query_object.target.name} IS NOT NULL"
-          selection.order_by = query_object.target.name
-          selection.order    = case query_object.operator
-                               when :asc then :ascending
-                               when :desc then :descending
-                               else raise "Unrecognized sort direction"
-                               end
-        end
-        selection.conditions = conditions.compact.inject([]){|conds, cond|
-          conds << " AND " unless conds.empty?
-          conds << cond
-        }
-        if query.limit.nil?
-          selection.limit = :none
-        else
-          selection.limit = query.limit
-        end
-        unless query.offset.nil?
-          selection.offset = query.offset
-        end
-
-        items = []
-        time = Benchmark.realtime do
-          # TODO update Record to be created from name/attributes pair
-          selection.each do |name, value| 
-            items << {name => value}
-          end
-        end
-
-        items
-      end
-      
       # Creates an item name for a query
       def item_name_for_query(query)
         sdb_type = simpledb_type(query.model)
@@ -320,20 +194,16 @@ module DataMapper
       end
 
       def database
-        SDBTools::Database.new(
+        options = sdb ? {:sdb_interface => sdb} : {}
+        @database ||= SDBTools::Database.new(
           @sdb_options[:access_key], 
           @sdb_options[:secret_key],
-          :sdb_interface => sdb)
+          options)
       end
       
       # Returns an SimpleDB instance to work with
       def sdb
-        if @null_mode then return @sdb ||= NullSdbInterface.new(logger) end
-
-        access_key = @sdb_options[:access_key]
-        secret_key = @sdb_options[:secret_key]
-        @sdb ||= RightAws::SdbInterface.new(access_key,secret_key,@sdb_options)
-        @sdb
+        @sdb ||= (@null_mode ? NullSdbInterface.new(logger) : nil)
       end
       
       def update_consistency_token
@@ -385,6 +255,7 @@ module DataMapper
         selection_options = {
           :attributes => fields_to_request(query),
           :conditions => where_expression,
+          :batch_limit => batch_limit,
           :limit      => query_limit(query),
           :logger     => logger
         }
@@ -403,7 +274,9 @@ module DataMapper
 
       def fields_to_request(query)
         fields = []
-        fields.concat(query.fields.map{|f| f.field})
+        fields.concat(query.fields.map{|f| 
+            f.field if f.respond_to?(:field)
+          }.compact)
         fields.concat(DmAdapterSimpledb::Record::META_KEYS)
         fields.uniq!
         fields
@@ -434,12 +307,21 @@ module DataMapper
                      end
         table      = DmAdapterSimpledb::Table.new(query.model)
         meta_key   = DmAdapterSimpledb::Record::METADATA_KEY
+
+        # The simpledb_type key is deprecated
+        old_table_key = DmAdapterSimpledb::Record::STORAGE_NAME_KEY
+
+        quoted_table_key = SDBTools::Selection.quote_name(old_table_key)
         quoted_key = SDBTools::Selection.quote_name(meta_key)
         conditions.merge!(
-          :conditions => ["#{quoted_key} = ?", table.token])
+          :conditions => [
+            "( #{quoted_key} = ? OR #{quoted_table_key} = ? )", 
+            table.token,
+            table.simpledb_type
+          ])
         conditions
       end
-      
+
       def query_limit(query)
         query.limit.nil? ? :none : query.limit
       end

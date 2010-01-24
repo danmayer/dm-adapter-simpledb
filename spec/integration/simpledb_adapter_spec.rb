@@ -138,33 +138,15 @@ EOF
       persons.length.should == 0
     end
 
-    describe '#query' do
-      before(:each) do
-        @domain = Friend.repository(:default).adapter.sdb_options[:domain]
-      end
-      it "should return an array of records" do
-        records = Friend.repository(:default).adapter.query("SELECT age, wealth from #{@domain} where age = '25'")
-        records.should == [{"wealth"=>["25.0"], "age"=>["25"]}]
-      end
-      it "should return empty array if no matches" do
-        records = Friend.repository(:default).adapter.query("SELECT age, wealth from #{@domain} where age = '15'")
-        records.should be_empty
-      end
-      it "should raise an error if query is invalid" do
-        lambda do
-          records = Friend.repository(:default).adapter.query("SELECT gaga")
-        end.should raise_error(RightAws::AwsError)
-      end
-    end
     describe 'aggregate' do
       it "should respond to count(*)" do
         Friend.count.should == 1
       end
       it "should not respond to any other aggregates" do
-        lambda { Friend.min(:age) }.should raise_error(ArgumentError)
-        lambda { Friend.max(:age) }.should raise_error(ArgumentError)
-        lambda { Friend.avg(:age) }.should raise_error(ArgumentError)
-        lambda { Friend.sum(:age) }.should raise_error(ArgumentError)
+        lambda { Friend.min(:age) }.should raise_error(NotImplementedError)
+        lambda { Friend.max(:age) }.should raise_error(NotImplementedError)
+        lambda { Friend.avg(:age) }.should raise_error(NotImplementedError)
+        lambda { Friend.sum(:age) }.should raise_error(NotImplementedError)
       end
     end
   end

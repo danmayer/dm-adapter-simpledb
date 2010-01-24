@@ -7,8 +7,8 @@ A DataMapper adapter for Amazon's SimpleDB service.
 Features:
  * Uses the RightAWS gem for efficient SimpleDB operations.
  * Full set of CRUD operations
- * Supports all DataMapper query predicates.
- * Can translate many queries into efficient native SELECT operations.
+ * Supports nearly all DataMapper query predicates.
+ * Full support for complex nested union, intersaction, and negation in queries
  * Migrations
  * DataMapper identity map support for record caching
  * Lazy-loaded attributes
@@ -17,6 +17,7 @@ Features:
  * Basic aggregation support (Model.count("..."))
  * String "chunking" permits attributes to exceed the 1024-byte limit
  * Support for efficient :limit and :offset, for result set paging
+ * Robust quoting of names in values in selects
 
 Note: as of version 1.0.0, this gem supports supports the DataMapper 0.10.*
 series and breaks backwards compatibility with DataMapper 0.9.*.
@@ -39,9 +40,6 @@ http://github.com/devver/dm-adapter-simpledb/
 
 == TODO
 
- * More complete handling of NOT conditions in queries
- * Support for ORs, parens, and nested queries in general
- * Robust quoting in SELECT calls
  * Handle exclusive ranges natively
    Implement as inclusive range + filter step
  * Tests for associations
@@ -58,8 +56,7 @@ http://github.com/devver/dm-adapter-simpledb/
  * Silence SSL warnings
    See http://pivotallabs.com/users/carl/blog/articles/1079-standup-blog-11-24-2009-model-validations-without-backing-store-associations-to-array-and-ssl-with-aws
  * Token cache for reduced requests when given an offset
- * Use logger set in initializer instead of DataMapper.logger
- * Remove limit on :limit; decouple SimpleDB LIMIT from DataMapper :limit
+ * Optimize key queries
 
 == Usage
   

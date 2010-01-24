@@ -8,6 +8,7 @@ describe DataMapper::Adapters::SimpleDBAdapter do
     @adapter = DataMapper::Repository.adapters[:default]
     @old_consistency_policy = @adapter.consistency_policy
     @adapter.consistency_policy = :automatic
+    # @adapter.logger = ::Logger.new($stderr)
   end
 
   after :all do

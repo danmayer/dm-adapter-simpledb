@@ -21,8 +21,9 @@ describe DataMapper::Adapters::SimpleDBAdapter do
         anything,
         hash_including(
           'simpledb_type' => ["products"], 
-          'stock'         => ["3"], 
-          'name'          => ["War and Peace"]))
+          'stock'         => ["3"],
+          'name'          => ["War and Peace"]),
+        :replace)
       @record.save
     end
   end

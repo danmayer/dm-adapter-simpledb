@@ -22,7 +22,7 @@ DataMapper.setup(
   :logger        => logger)
 
 logger.info "Writing records"
-10.times do |i|
+100.times do |i|
   Post.create(:title => "title#{i}", :body => "body#{i}")
 end
 

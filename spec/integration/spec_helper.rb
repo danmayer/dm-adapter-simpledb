@@ -4,6 +4,7 @@ $LOAD_PATH.unshift(File.join(ROOT,'lib'))
 require 'simpledb_adapter'
 require 'logger'
 require 'fileutils'
+require 'right_aws'
 require 'spec'
 require 'spec/autorun'
 

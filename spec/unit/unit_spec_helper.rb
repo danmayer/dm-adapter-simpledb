@@ -1,6 +1,7 @@
 require 'spec'
 ROOT = File.expand_path('../..', File.dirname(__FILE__))
 $LOAD_PATH.unshift(File.join(ROOT,'lib'))
+require 'right_aws'
 require 'simpledb_adapter'
 
 Spec::Runner.configure do |config|

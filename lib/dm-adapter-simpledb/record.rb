@@ -315,7 +315,7 @@ module DmAdapterSimpledb
     private
 
     def replace_newline_placeholders(value)
-      value.gsub("[[[NEWLINE]]]", "\n")
+      value && value.gsub("[[[NEWLINE]]]", "\n")
     end
   end
 

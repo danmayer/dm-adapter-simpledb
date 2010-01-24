@@ -1,3 +1,60 @@
+== 1.4.0 2010-01-24
+
+* Major enhancements:
+  * Completely rewritten query generation engine queries supports
+    arbitrarily deep nesting of complex AND/OR/NOT operators.  This means that
+    code such as:
+
+      Post.all(:title => "foo") | Post.all(:title => "bar", :body => "baz")
+
+    will generate a SELECT statement similar to the following
+
+      SELECT title from mydomain where title = "foo" OR ( title = "bar" AND body = "baz" )
+
+  * New query engine supports range and IN predicates to the extent possible on
+    SimpleDB, including converting empty inclusion predicates to a form that
+    SimpleDB can understand. Exclusive ranges e.g. (0...5) now raise a
+    NotImplementedError instead of being silently flaky.
+
+  * Support for native condition expressions, e.g.:
+
+      Post.all(:conditions => 'title in "%banannas%"')
+
+    This includes support for variable interpolation:
+
+      Post.all(:conditions => ['title = ?', "foo"])
+
+    or:
+
+      post.all(:conditions => ['title = :title', {:title => "foo"}]
+
+    Interpolated values will be quoted according to SimpleDB value quoting
+    rules.
+
+  * Support for arbitrarily large limits. The concept of a query limit and a
+    batch limit have been completely separated in this release. If the batch
+    limit is set to 100 and a query is limited to 201 items, it will generate
+    three selects: two with "LIMIT 100" and one with "LIMIT 1".
+
+  * Vastly improved logging and benchmarking. For a given high-level operation,
+    such as a DataMapper "read", the adapter can output:
+    
+    * Number of individual AWS calls made (e.g. individual SELECTs)
+    * Aggregate AWS box usage
+    * User CPU time
+    * System CPU time
+    * Wallclock time
+
+* Minor enhancements:
+  * Even better quoting. With the new SELECT translator in place, all domain
+    names, attribute names, and values should be quoted properly according to
+    SimpleDB rules.
+  * No direct dependency on RightAws.  All operations are performed via SDBTools
+    now.
+  * New "batch_limit" option to configure the maximum results requested per
+    SELECT call.  Amazon sets a cap of 250 on this value.
+
+
 == 1.3.0 2010-01-19
 
 * 1 major enhancement:
@@ -6,6 +63,8 @@
 
 * 1 minor enhancement:
   * Better quoting of select statements using the 'sdbtools' library.
+  * "Null mode" can be set with :null => true. Null mode logs DB operations but
+    does not actually connect to AWS.
 
 == 1.2.0 2010-01-13
 

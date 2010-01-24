@@ -54,7 +54,6 @@ begin
 A DataMapper adapter for Amazon's SimpleDB service. 
 
 Features:
- * Uses the RightAWS gem for efficient SimpleDB operations.
  * Full set of CRUD operations
  * Supports all DataMapper query predicates.
  * Can translate many queries into efficient native SELECT operations.
@@ -81,7 +80,7 @@ END
     gem.add_dependency('dm-migrations',         '~> 0.10.0')
     gem.add_dependency('dm-types',              '~> 0.10.0')
     gem.add_dependency('uuidtools',             '~> 2.0')
-    gem.add_dependency('sdbtools',              '~> 0.3')
+    gem.add_dependency('sdbtools',              '~> 0.4')
   end
   Jeweler::GemcutterTasks.new
 rescue LoadError

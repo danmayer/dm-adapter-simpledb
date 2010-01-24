@@ -6,7 +6,6 @@ gem 'dm-core',       '~> 0.10.0'
 require 'dm-core'
 require 'dm-aggregates'
 require 'digest/sha1'
-require 'right_aws'
 require 'uuidtools'
 require 'sdbtools'
 

@@ -108,6 +108,42 @@ module DmAdapterSimpledb
       specify { @it.to_s.should == 'title IN ("FOO", "BAZ")' }
     end
 
+    context "given an IN query with an empty list" do
+      before :each do
+        @conditions = Operation.new(
+          :and,
+          Comparison.new(:in, Post.properties[:title], []))
+        @it = WhereExpression.new(@conditions)
+      end
+
+      specify { @it.to_s.should == 'title IS NULL' }
+    end
+
+    context "given a negated IN query with an empty list" do
+      before :each do
+        @conditions = Operation.new(
+          :and,
+          Comparison.new(:eql, Post.properties[:title], "FOO"),
+          Operation.new(:not,
+            Comparison.new(:in, Post.properties[:title], [])))
+        @it = WhereExpression.new(@conditions)
+      end
+
+      specify { @it.to_s.should == 'title = "FOO"' }
+    end
+
+    context "given an empty IN query OR another IN query" do
+      before :each do
+        @conditions = Operation.new(
+          :or,
+          Comparison.new(:in, Post.properties[:body], []),
+          Comparison.new(:in, Post.properties[:title], ["foo"]))
+        @it = WhereExpression.new(@conditions)
+      end
+
+      specify { @it.to_s.should == 'body IS NULL OR title IN ("foo")' }
+    end
+
     context "given an IN query with a range" do
       before :each do
         @conditions = Operation.new(
@@ -121,6 +157,7 @@ module DmAdapterSimpledb
 
     context "given an IN query with an exclusive range" do
       before :each do
+        pending "Implementationm of exclusive ranges"
         @conditions = Operation.new(
           :and,
           Comparison.new(:in, Post.properties[:title], ("A"..."Z")),
@@ -134,6 +171,27 @@ module DmAdapterSimpledb
         @it.unsupported_conditions.should be ==
           Operation.new(:and,
             Comparison.new(:in, Post.properties[:title], ("A"..."Z")))
+      end
+    end
+
+    context "given a negated IN query with an exclusive range" do
+      before :each do
+        pending "Implementationm of exclusive ranges"
+        @conditions = Operation.new(
+          :and,
+          Operation.new(:not,
+            Comparison.new(:in, Post.properties[:title], (1...5))))
+        @it = WhereExpression.new(@conditions)
+      end
+
+      specify { @it.to_s.should == 'NOT title BETWEEN "1" AND "5"' }
+
+      it "should include the range in unsupported conditions" do
+        @it.unsupported_conditions.should be ==
+          Operation.new(:and,
+            Operation.new(:not,
+              Comparison.new(:in, Post.properties[:title], (1...5))))
+        @it.unsupported_conditions.operands.first.operands.first.value.should be == (1...5)
       end
     end
 
@@ -183,6 +241,17 @@ module DmAdapterSimpledb
         @conditions = Operation.new(
           :and,
           ["body in (?, ?)", "FUZ", "BUZ"])
+        @it = WhereExpression.new(@conditions)
+      end
+
+      specify { @it.to_s.should == 'body in ("FUZ", "BUZ")' }
+    end
+
+    context "given a literal expression with subarray of replacements" do
+      before :each do
+        @conditions = Operation.new(
+          :and,
+          ["body in (?, ?)", ["FUZ", "BUZ"]])
         @it = WhereExpression.new(@conditions)
       end
 
