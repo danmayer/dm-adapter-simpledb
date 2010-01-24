@@ -1,0 +1,40 @@
+#!/usr/bin/env ruby
+require 'rubygems'
+require File.expand_path('../lib/dm-adapter-simpledb', File.dirname(__FILE__))
+require 'logger'
+
+include DataMapper
+
+class Post
+  include Resource
+  
+  property :id,    Serial
+  property :title, String
+  property :body,  Text
+end
+
+logger = ::Logger.new($stderr, ::Logger::DEBUG)
+
+DataMapper.setup(
+  :default,
+  :domain        => "dm_simpledb_adapter_benchmark",
+  :adapter       => 'simpledb',
+  :create_domain => true,
+  :logger        => logger)
+
+logger.info "Writing records"
+100.times do |i|
+  Post.create(:title => "title#{i}", :body => "body#{i}")
+end
+
+logger.info "Waiting a bit for consistency"
+sleep 2
+
+logger.info "benchmarking OR"
+SDBTools::Transaction.on_close = 
+  SDBTools::Transaction.log_transaction_close(logger)
+SDBTools::Transaction.open("benchmark OR") do |t|
+  query      = Post.all(:title.like => "%2%") | Post.all(:title.like => "%5%")
+  item_count = query.to_a.size
+  logger.info "Found #{item_count} items"
+end

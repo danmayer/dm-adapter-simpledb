@@ -38,21 +38,21 @@ module DataMapper
         @null_mode = options.fetch(:null) { false }
 
         if @null_mode
-          logger.info "SimpleDB adapter for domain #{domain} is in null mode"
+          logger.info "SimpleDB adapter for domain #{domain_name} is in null mode"
         end
 
         @consistency_policy = 
           normalised_options.fetch(:wait_for_consistency) { false }
         @sdb = options.fetch(:sdb_interface) { nil }
-        if @sdb_options[:create_domain] && !domains.include?(@sdb_options[:domain])
-          @sdb_options[:logger].info "Creating domain #{domain}"
-          @sdb.create_domain(@sdb_options[:domain])
+        if @sdb_options[:create_domain] && !domains.include?(domain_name)
+          @sdb_options[:logger].info "Creating domain #{domain_name}"
+          database.create_domain(domain_name)
         end
       end
 
       def create(resources)
         created = 0
-        time = Benchmark.realtime do
+        transaction("CREATE") do
           resources.each do |resource|
             uuid = UUIDTools::UUID.timestamp_create
             initialize_serial(resource, uuid.to_i)
@@ -60,63 +60,67 @@ module DataMapper
             record     = DmAdapterSimpledb::Record.from_resource(resource)
             attributes = record.writable_attributes
             item_name  = record.item_name
-            sdb.put_attributes(domain, item_name, attributes)
+            domain.put(item_name, attributes)
             created += 1
           end
         end
-        logger.debug(format_log_entry("(#{created}) INSERT #{resources.inspect}", time))
         modified!
         created
       end
       
       def delete(collection)
         deleted = 0
-        time = Benchmark.realtime do
+        transaction("DELETE") do
           collection.each do |resource|
             record = DmAdapterSimpledb::Record.from_resource(resource)
             item_name = record.item_name
-            sdb.delete_attributes(domain, item_name)
+            domain.delete(item_name)
             deleted += 1
           end
+
+          # TODO no reason we can't select a bunch of item names with an
+          # arbitrary query and then delete them.
           raise NotImplementedError.new('Only :eql on delete at the moment') if not_eql_query?(collection.query)
-        end; logger.debug(format_log_entry("(#{deleted}) DELETE #{collection.query.conditions.inspect}", time))
+        end
         modified!
         deleted
       end
 
       def read(query)
         maybe_wait_for_consistency
-        table = DmAdapterSimpledb::Table.new(query.model)
-        conditions, order, unsupported_conditions = 
-          set_conditions_and_sort_order(query, table.simpledb_type)
-        results = get_results(query, conditions, order)
-        records = results.map{|result| 
-          DmAdapterSimpledb::Record.from_simpledb_hash(result)
-        }
+        transaction("READ") do |t|
+          table = DmAdapterSimpledb::Table.new(query.model)
+          conditions, order, unsupported_conditions = 
+            set_conditions_and_sort_order(query, table.simpledb_type)
+          results = get_results(query, conditions, order)
+          records = results.map{|result| 
+            DmAdapterSimpledb::Record.from_simpledb_hash(result)
+          }
 
-        proto_resources = records.map{|record|
-          record.to_resource_hash(query.fields)
-        }
-        query.conditions.operands.reject!{ |op|
-          !unsupported_conditions.include?(op)
-        }
+          proto_resources = records.map{|record|
+            record.to_resource_hash(query.fields)
+          }
+          query.conditions.operands.reject!{ |op|
+            !unsupported_conditions.include?(op)
+          }
 
-        # This used to be a simple call to Query#filter_records(), but that
-        # caused the result limit to be re-imposed on an already limited result
-        # set, with the upshot that too few records were returned. So here we do
-        # everything filter_records() does EXCEPT limiting.
-        records = proto_resources
-        records = records.uniq if query.unique?
-        records = query.match_records(records)
-        records = query.sort_records(records)
+          # This used to be a simple call to Query#filter_records(), but that
+          # caused the result limit to be re-imposed on an already limited result
+          # set, with the upshot that too few records were returned. So here we do
+          # everything filter_records() does EXCEPT limiting.
+          records = proto_resources
+          records = records.uniq if query.unique?
+          records = query.match_records(records)
+          records = query.sort_records(records)
 
 
-        records
+          records
+        end
       end
       
       def update(attributes, collection)
         updated = 0
-        time = Benchmark.realtime do
+        transaction("UPDATE") do
           collection.each do |resource|
             updated_resource = resource.dup
             updated_resource.attributes = attributes
@@ -125,16 +129,15 @@ module DataMapper
             attrs_to_delete = record.deletable_attributes
             item_name       = record.item_name
             unless attrs_to_update.empty?
-              sdb.put_attributes(domain, item_name, attrs_to_update, :replace)
+              domain.put(item_name, attrs_to_update, :replace => true)
             end
             unless attrs_to_delete.empty?
-              sdb.delete_attributes(domain, item_name, attrs_to_delete)
+              domain.delete(item_name, attrs_to_delete)
             end
             updated += 1
           end
           raise NotImplementedError.new('Only :eql on delete at the moment') if not_eql_query?(collection.query)
         end
-        logger.debug(format_log_entry("UPDATE #{collection.query.conditions.inspect} (#{updated} times)", time))
         modified!
         updated
       end
@@ -148,17 +151,19 @@ module DataMapper
       
       def aggregate(query)
         raise ArgumentError.new("Only count is supported") unless (query.fields.first.operator == :count)
-        table    = DmAdapterSimpledb::Table.new(query.model)
-        sdb_type = table.simpledb_type
-        conditions, order, unsupported_conditions = set_conditions_and_sort_order(query, sdb_type)
+        transaction("AGGREGATE") do |t|
+          table    = DmAdapterSimpledb::Table.new(query.model)
+          sdb_type = table.simpledb_type
+          conditions, order, unsupported_conditions = set_conditions_and_sort_order(query, sdb_type)
 
-        query_call = "SELECT count(*) FROM #{domain} "
-        query_call << "WHERE #{conditions.compact.join(' AND ')}" if conditions.length > 0
-        results = nil
-        time = Benchmark.realtime do
-          results = sdb.select(query_call)
-        end; logger.debug(format_log_entry(query_call, time))
-        [results[:items][0].values.first["Count"].first.to_i]
+          query_call = "SELECT count(*) FROM #{domain_name} "
+          query_call << "WHERE #{conditions.compact.join(' AND ')}" if conditions.length > 0
+          results = nil
+          time = Benchmark.realtime do
+            results = sdb.select(query_call)
+          end; logger.debug(format_log_entry(query_call, time))
+          [results[:items][0].values.first["Count"].first.to_i]
+        end
       end
 
       # For testing purposes only.
@@ -166,25 +171,22 @@ module DataMapper
         return unless @current_consistency_token
         token = :none
         begin
-          results = sdb.get_attributes(domain, '__dm_consistency_token', '__dm_consistency_token')
+          results = domain.get('__dm_consistency_token', '__dm_consistency_token')
           tokens  = Array(results[:attributes]['__dm_consistency_token'])
         end until tokens.include?(@current_consistency_token)
       end
 
       def domains
-        result = []
-        token  = nil
-        begin
-          response = sdb.list_domains(nil, token)
-          result.concat(response[:domains])
-          token = response[:next_token]
-        end while(token)
-        result
+        database.domains
       end
 
     private
-      # Returns the domain for the model
       def domain
+        @domain ||= database.domain(@sdb_options[:domain])
+      end
+
+      # Returns the domain for the model
+      def domain_name
         @sdb_options[:domain]
       end
 
@@ -263,7 +265,7 @@ module DataMapper
         
         selection = SDBTools::Selection.new(
           sdb,
-          domain,
+          domain_name,
           :attributes => fields_to_request)
 
         if query.order && query.order.length > 0
@@ -278,7 +280,7 @@ module DataMapper
                                end
         end
         selection.conditions = conditions.compact.inject([]){|conds, cond|
-          conds << "AND" unless conds.empty?
+          conds << " AND " unless conds.empty?
           conds << cond
         }
         if query.limit.nil?
@@ -297,7 +299,6 @@ module DataMapper
             items << {name => value}
           end
         end
-        logger.debug(format_log_entry(selection.to_s, time))
 
         items
       end
@@ -321,6 +322,13 @@ module DataMapper
         selectors = [ :gt, :gte, :lt, :lte, :not, :like, :in ]
         return (selectors - conditions).size != selectors.size
       end
+
+      def database
+        SDBTools::Database.new(
+          @sdb_options[:access_key], 
+          @sdb_options[:secret_key],
+          :sdb_interface => sdb)
+      end
       
       # Returns an SimpleDB instance to work with
       def sdb
@@ -332,14 +340,9 @@ module DataMapper
         @sdb
       end
       
-      def format_log_entry(query, ms = 0)
-        'SDB (%.1fs)  %s' % [ms, query.squeeze(' ')]
-      end
-
       def update_consistency_token
         @current_consistency_token = UUIDTools::UUID.timestamp_create.to_s
-        sdb.put_attributes(
-          domain, 
+        domain.put(
           '__dm_consistency_token', 
           {'__dm_consistency_token' => [@current_consistency_token]})
       end
@@ -376,6 +379,11 @@ module DataMapper
         else
           raise "Invalid :wait_for_consistency option: #{@consistency_policy.inspect}"
         end
+      end
+
+      def transaction(description, &block)
+        on_close = SDBTools::Transaction.log_transaction_close(logger)
+        SDBTools::Transaction.open(description, on_close, &block)
       end
 
     end # class SimpleDBAdapter
