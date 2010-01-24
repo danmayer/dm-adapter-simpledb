@@ -89,8 +89,6 @@ module DataMapper
       def read(query)
         maybe_wait_for_consistency
         transaction("READ") do |t|
-          table = DmAdapterSimpledb::Table.new(query.model)
-
           query = query.dup
 
           selection = selection_from_query(query)
@@ -103,9 +101,6 @@ module DataMapper
             record.to_resource_hash(query.fields)
           }
           
-          query.clear
-          query.update(:conditions => where_expression.unsupported_conditions)
-
           # This used to be a simple call to Query#filter_records(), but that
           # caused the result limit to be re-imposed on an already limited result
           # set, with the upshot that too few records were returned. So here we do
@@ -151,7 +146,7 @@ module DataMapper
       end
       
       def aggregate(query)
-        raise ArgumentError.new("Only count is supported") unless (query.fields.first.operator == :count)
+        raise NotImplementedError, "Only count is supported" unless (query.fields.first.operator == :count)
         transaction("AGGREGATE") do |t|
           table    = DmAdapterSimpledb::Table.new(query.model)
           sdb_type = table.simpledb_type
@@ -382,6 +377,7 @@ module DataMapper
         end
       end
 
+      # WARNING This method updates +query+ as a side-effect
       def selection_from_query(query)
         query.update(extra_conditions(query))
         where_expression  = 
@@ -395,6 +391,8 @@ module DataMapper
         selection_options.merge!(sort_instructions(query))
         selection = domain.selection(selection_options)
         selection.offset = query.offset unless query.offset.nil?
+        query.clear
+        query.update(:conditions => where_expression.unsupported_conditions)
         selection
       end
 
@@ -429,11 +427,14 @@ module DataMapper
       def extra_conditions(query)
         # SimpleDB requires all sort-by attributes to also be included in a
         # predicate.
-        if (direction = first_order_direction(query))
-          { direction.target.field.to_sym.not => nil }
-        else
-          {}
-        end
+        conditions = if (direction = first_order_direction(query))
+                       { direction.target.field.to_sym.not => nil }
+                     else
+                       {}
+                     end
+        table = DmAdapterSimpledb::Table.new(query.model)
+        conditions.merge!(DmAdapterSimpledb::Record::METADATA_KEY => table.token)
+        conditions
       end
       
       def query_limit(query)

@@ -20,8 +20,9 @@ module DmAdapterSimpledb
 
     # Returns a string so we know what type of
     def simpledb_type
-      model.storage_name(repository_name)
+      model.storage_name(DataMapper.repository.name)
     end
+    alias_method :storage_name, :simpledb_type
 
     def repository_name
       # TODO this should probably take into account the adapter
