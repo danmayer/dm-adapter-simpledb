@@ -92,18 +92,8 @@ module DataMapper
           table = DmAdapterSimpledb::Table.new(query.model)
 
           query = query.dup
-          query.update(extra_conditions(query))
-          where_expression  = 
-            DmAdapterSimpledb::WhereExpression.new(query.conditions, :logger => logger)
-          selection_options = {
-            :attributes => fields_to_request(query),
-            :conditions => where_expression,
-            :limit      => query_limit(query),
-            :logger     => logger
-          }
-          selection_options.merge!(sort_instructions(query))
-          selection = domain.selection(selection_options)
-          selection.offset = query.offset unless query.offset.nil?
+
+          selection = selection_from_query(query)
 
           records = selection.map{|name, attributes| 
             DmAdapterSimpledb::Record.from_simpledb_hash(name => attributes)
@@ -392,6 +382,22 @@ module DataMapper
         end
       end
 
+      def selection_from_query(query)
+        query.update(extra_conditions(query))
+        where_expression  = 
+          DmAdapterSimpledb::WhereExpression.new(query.conditions, :logger => logger)
+        selection_options = {
+          :attributes => fields_to_request(query),
+          :conditions => where_expression,
+          :limit      => query_limit(query),
+          :logger     => logger
+        }
+        selection_options.merge!(sort_instructions(query))
+        selection = domain.selection(selection_options)
+        selection.offset = query.offset unless query.offset.nil?
+        selection
+      end
+
       def transaction(description, &block)
         on_close = SDBTools::Transaction.log_transaction_close(logger)
         SDBTools::Transaction.open(description, on_close, &block)
@@ -434,9 +440,12 @@ module DataMapper
         query.limit.nil? ? :none : query.limit
       end
 
+      # SimpleDB only supports a single sort-by field. Further sorting has to be
+      # handled locally.
       def first_order_direction(query)
         Array(query.order).first
       end
+
 
     end # class SimpleDBAdapter
 
