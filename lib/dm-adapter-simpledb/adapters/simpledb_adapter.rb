@@ -90,19 +90,31 @@ module DataMapper
         maybe_wait_for_consistency
         transaction("READ") do |t|
           table = DmAdapterSimpledb::Table.new(query.model)
-          conditions, order, unsupported_conditions = 
-            set_conditions_and_sort_order(query, table.simpledb_type)
-          results = get_results(query, conditions, order)
-          records = results.map{|result| 
-            DmAdapterSimpledb::Record.from_simpledb_hash(result)
+
+          query = query.dup
+          query.update(extra_conditions(query))
+          where_expression  = 
+            DmAdapterSimpledb::WhereExpression.new(query.conditions, :logger => logger)
+          selection_options = {
+            :attributes => fields_to_request(query),
+            :conditions => where_expression,
+            :limit      => query_limit(query),
+            :logger     => logger
+          }
+          selection_options.merge!(sort_instructions(query))
+          selection = domain.selection(selection_options)
+          selection.offset = query.offset unless query.offset.nil?
+
+          records = selection.map{|name, attributes| 
+            DmAdapterSimpledb::Record.from_simpledb_hash(name => attributes)
           }
 
           proto_resources = records.map{|record|
             record.to_resource_hash(query.fields)
           }
-          query.conditions.operands.reject!{ |op|
-            !unsupported_conditions.include?(op)
-          }
+          
+          query.clear
+          query.update(:conditions => where_expression.unsupported_conditions)
 
           # This used to be a simple call to Query#filter_records(), but that
           # caused the result limit to be re-imposed on an already limited result
@@ -112,7 +124,6 @@ module DataMapper
           records = records.uniq if query.unique?
           records = query.match_records(records)
           records = query.sort_records(records)
-
 
           records
         end
@@ -384,6 +395,47 @@ module DataMapper
       def transaction(description, &block)
         on_close = SDBTools::Transaction.log_transaction_close(logger)
         SDBTools::Transaction.open(description, on_close, &block)
+      end
+
+      def fields_to_request(query)
+        fields = []
+        fields.concat(query.fields.map{|f| f.field})
+        fields.concat(DmAdapterSimpledb::Record::META_KEYS)
+        fields.uniq!
+        fields
+      end
+
+      def sort_instructions(query)
+        direction = first_order_direction(query)
+        if direction
+          order_by = direction.target.field
+          order    = case direction.operator
+                     when :asc then :ascending
+                     when :desc then :descending
+                     else raise "Unrecognized sort direction"
+                     end
+          {:order_by => order_by, :order => order}
+        else
+          {}
+        end
+      end
+
+      def extra_conditions(query)
+        # SimpleDB requires all sort-by attributes to also be included in a
+        # predicate.
+        if (direction = first_order_direction(query))
+          { direction.target.field.to_sym.not => nil }
+        else
+          {}
+        end
+      end
+      
+      def query_limit(query)
+        query.limit.nil? ? :none : query.limit
+      end
+
+      def first_order_direction(query)
+        Array(query.order).first
       end
 
     end # class SimpleDBAdapter

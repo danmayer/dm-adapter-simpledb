@@ -8,8 +8,7 @@ include DataMapper
 class Post
   include Resource
   
-  property :id,    Serial
-  property :title, String
+  property :title, String, :key => true
   property :body,  Text
 end
 
