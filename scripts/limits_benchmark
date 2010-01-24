@@ -1,0 +1,51 @@
+#!/usr/bin/env ruby
+require 'rubygems'
+require File.expand_path('../lib/dm-adapter-simpledb', File.dirname(__FILE__))
+require 'logger'
+
+include DataMapper
+
+class Post
+  include Resource
+  
+  property :title, String, :key => true
+  property :body,  Text
+end
+
+logger = ::Logger.new($stderr, ::Logger::DEBUG)
+
+DataMapper.setup(
+  :default,
+  :domain        => "dm_simpledb_adapter_benchmark",
+  :adapter       => 'simpledb',
+  :create_domain => true,
+  :logger        => logger,
+  :batch_limit   => 10)
+
+logger.info "Writing records"
+100.times do |i|
+  Post.create(:title => "title#{i}", :body => "body#{i}")
+end
+
+logger.info "Waiting a bit for consistency"
+sleep 2
+
+SDBTools::Transaction.on_close = 
+  SDBTools::Transaction.log_transaction_close(logger)
+SDBTools::Transaction.open("benchmark limited query") do |t|
+  # With a batch limit of 10, this should result in two queries of LIMIT 10 and
+  # one with LIMIT 5
+  query      = Post.all(:limit => 25)
+  item_count = query.to_a.size
+  logger.info "Found #{item_count} items"
+end
+
+SDBTools::Transaction.on_close = 
+  SDBTools::Transaction.log_transaction_close(logger)
+SDBTools::Transaction.open("benchmark query with limit and offset") do |t|
+  # With a batch limit of 10, this should result in two queries of LIMIT 10 and
+  # one with LIMIT 5
+  query      = Post.all(:limit => 25, :order => :title.asc, :offset => 25)
+  item_count = query.to_a.size
+  logger.info "Found #{item_count} items"
+end
