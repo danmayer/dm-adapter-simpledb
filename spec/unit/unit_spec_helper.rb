@@ -1,12 +1,12 @@
 require 'spec'
 ROOT = File.expand_path('../..', File.dirname(__FILE__))
 $LOAD_PATH.unshift(File.join(ROOT,'lib'))
-require 'right_aws'
+require 'aws'
 require 'simpledb_adapter'
 
 Spec::Runner.configure do |config|
   config.before :each do
-    @sdb = stub("RightAWS::SdbInterface").as_null_object
+    @sdb = stub("AWS::SdbInterface").as_null_object
     @log = stub("Log").as_null_object
 
     # Using Abstract adapter as a null DB

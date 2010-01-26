@@ -29,7 +29,7 @@ module DataMapper
         # we need to return an object which IS considered a primitive - in this
         # case a plain 'ole Ruby Object. In order to convey the actual array
         # value to the backend, we tack on a #to_ary method which returns the
-        # array data. RightAws calls Array() on all values before writing them,
+        # array data. Aws calls Array() on all values before writing them,
         # which in turn calls #to_ary(), and winds up with the correct data. In
         # effect we are sneaking the array data through DataMapper inside a
         # singleton method.

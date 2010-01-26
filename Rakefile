@@ -80,7 +80,7 @@ END
     gem.add_dependency('dm-migrations',         '~> 0.10.0')
     gem.add_dependency('dm-types',              '~> 0.10.0')
     gem.add_dependency('uuidtools',             '~> 2.0')
-    gem.add_dependency('sdbtools',              '~> 0.4')
+    gem.add_dependency('sdbtools',              '~> 0.5')
   end
   Jeweler::GemcutterTasks.new
 rescue LoadError

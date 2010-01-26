@@ -4,7 +4,6 @@ $LOAD_PATH.unshift(File.join(ROOT,'lib'))
 require 'simpledb_adapter'
 require 'logger'
 require 'fileutils'
-require 'right_aws'
 require 'spec'
 require 'spec/autorun'
 
@@ -48,11 +47,8 @@ Spec::Runner.configure do |config|
     log.level = ::Logger::DEBUG
     DataMapper.logger.level = :debug
 
-    $control_sdb ||= RightAws::SdbInterface.new(
-      access_key, secret_key, :domain => test_domain)
-
     DataMapper.logger.set_log(log_file, :debug)
-    DataMapper.setup(:default, {
+    adapter = DataMapper.setup(:default, {
         :adapter => 'simpledb',
         :access_key => access_key,
         :secret_key => secret_key,
@@ -60,6 +56,7 @@ Spec::Runner.configure do |config|
         :logger => log,
         :wait_for_consistency => :manual
       })
+    $control_sdb = adapter.sdb_interface
   end
 
   # Run before each group

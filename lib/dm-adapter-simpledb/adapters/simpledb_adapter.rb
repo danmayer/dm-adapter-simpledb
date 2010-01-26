@@ -33,9 +33,12 @@ module DataMapper
         # here is chosen on the basis of it being unlikely to match any strings
         # found in real-world records, as well as being eye-catching in case any
         # nils DO manage to sneak in. It would be preferable if we could disable
-        # RightAWS's nil-token replacement altogether, but that does not appear
+        # AWS's nil-token replacement altogether, but that does not appear
         # to be an option.
         @sdb_options[:nil_representation] = "<[<[<NIL>]>]>"
+        @sdb_options[:connection_mode] = options.fetch(:connection_mode) {
+          :per_thread
+        }
         @null_mode   = options.fetch(:null) { false }
         @batch_limit = options.fetch(:batch_limit) {
           SDBTools::Selection::DEFAULT_RESULT_LIMIT
@@ -163,6 +166,10 @@ module DataMapper
         database.domains
       end
 
+      def sdb_interface
+        database.sdb
+      end
+
     private
       def domain
         @domain ||= database.domain(@sdb_options[:domain])
@@ -194,8 +201,10 @@ module DataMapper
       end
 
       def database
-        options = sdb ? {:sdb_interface => sdb} : {}
-        @database ||= SDBTools::Database.new(
+        return @database if defined?(@database) && !@database.nil?
+        options = @sdb_options.dup
+        if sdb then options.merge(:sdb_interface => sdb) end
+        @database = SDBTools::Database.new(
           @sdb_options[:access_key], 
           @sdb_options[:secret_key],
           options)
