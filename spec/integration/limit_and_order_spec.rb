@@ -1,6 +1,9 @@
 require 'pathname'
 require Pathname(__FILE__).dirname.expand_path + 'spec_helper'
 
+
+#Note some of these specs will fail on DM 0.10.2 until you patch DM core with this nessary patch
+# http://github.com/datamapper/dm-core/commit/3332db6c25ab9cea9ba58ce62a9ad3038303baa1
 class Hero
   include DataMapper::Resource
   
