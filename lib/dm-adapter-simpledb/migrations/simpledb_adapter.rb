@@ -21,12 +21,12 @@ module DataMapper
         # @param storage_name<String> a String defining the name of a domain
         # @return <Boolean> true if the storage exists
         def storage_exists?(storage_name)
-          domains = sdb.list_domains[:domains]
+          domains = sdb_interface.list_domains[:domains]
           domains.detect {|d| d == storage_name }!=nil
         end
-        
+
         def create_model_storage(model)
-          sdb.create_domain(@sdb_options[:domain])
+          database.create_domain(@sdb_options[:domain])
         end
         
         #On SimpleDB you probably don't want to destroy the whole domain
@@ -35,7 +35,7 @@ module DataMapper
         #rake db:automigrate destroy=true
         def destroy_model_storage(model)
           if ENV['destroy']!=nil && ENV['destroy']=='true'
-            sdb.delete_domain(@sdb_options[:domain])
+            sdb_interface.delete_domain(@sdb_options[:domain])
           end
         end
 
