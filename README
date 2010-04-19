@@ -59,6 +59,11 @@ http://github.com/devver/dm-adapter-simpledb/
  * Optimize key queries
 
 == Usage
+
+There is a functional example in examples/ in this project.
+
+A example Rails on SimpleDB project is maintained here: http://github.com/danmayer/datamapper-simpledb-rails-example
+A example Sinatra on SimpleDB project is maintained here: http://github.com/danmayer/sinatra-simpledb-example
   
 === Standalone
   
